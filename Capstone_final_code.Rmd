@@ -1,0 +1,373 @@
+---
+title: "Capstone Project"
+author: "Richar Martinez Castrillon - Student ID:500930115"
+output: github_document
+---
+
+# Packages used in the project.
+#install.packages("rpart")
+#install.packages("caret")
+#install.packages("e1071")
+#install.packages("gplots")
+#install.packages("dplyr")
+#install.packages("devtools")
+#install.packages("randomForest")
+```{r}
+library("gplots")
+library(rpart)
+library(caret)
+library(e1071)
+library("randomForest")
+library("devtools")
+library("tidyverse")
+library("VIM")
+library(dplyr)
+library("party")
+library("rpart")
+```
+
+#2.Data exploration.
+#2.1 Load Dataset.
+```{r}
+data<- read.csv(choose.files(), sep = ",")
+```
+
+2.2 Structure of Data, Head and Tail.
+```{r }
+str(data)
+```
+
+```{r}
+head(data)
+```
+
+```{r}
+tail(data)
+```
+
+#2.3 Summary of Data
+```{r}
+summary(data)
+```
+
+#Drop the first group of variables according to the observed data summary, considering missing #amount of values> 90%, variables with the same meaning, dates and description type variables that #will not be studied in the project, as simplification.
+```{r}
+droplist<- c("PARID","PROPERTYFRACTION","PROPERTYSTATE","PROPERTYUNIT","TAXSUBCODE","TAXSUBCODE_DESC","HOMESTEADFLAG","FARMSTEADFLAG","CLEANGREEN","ABATEMENTFLAG","CHANGENOTICEADDRESS2","ALT_ID","ASOFDATE","TAXYEAR","SCHOOLCODE","LEGAL1","LEGAL2","LEGAL3","NEIGHCODE","NEIGHDESC","OWNERCODE","CLASS","USECODE","RECORDDATE","SALEDATE","SALECODE","DEEDBOOK","DEEDPAGE","PREVSALEDATE","PREVSALEDATE2","CHANGENOTICEADDRESS1","CHANGENOTICEADDRESS2","CHANGENOTICEADDRESS3","CHANGENOTICEADDRESS4","STYLE","EXTERIORFINISH","ROOF","BASEMENT","GRADE","CONDITION","HEATINGCOOLING","PROPERTYHOUSENUM","PROPERTYZIP","COUNTYEXEMPTBLDG ","MUNICODE","YEARBLT","TAXDESC","CDU")
+Data2 <- data[,!colnames(data) %in% droplist]
+```
+#Strucure of data after dropped attributes.
+```{r}
+str(Data2)
+```
+
+#2.4Transform variables to correct data types
+```{r}
+Data2$PROPERTYADDRESS <- as.character(Data2$PROPERTYADDRESS)
+Data2$PROPERTYCITY <- as.character(Data2$PROPERTYCITY)
+Data2$MUNIDESC <- as.character(Data2$MUNIDESC)
+Data2$USEDESC <- as.character(Data2$USEDESC)
+```
+
+#2.5 Vizualization of data
+```{r}
+Data_num<-dplyr::select_if(Data2, is.numeric)
+Data_fact<-dplyr::select_if(Data2, is.factor)
+```
+
+#2.5.1 Histograms (numerical attribute,The following code generates the graphics. See them in the final document casptone project)
+par(mfrow = c(3,4))
+sapply(names(Data_num), function(cname){if(is.numeric(Data_num[[cname]]))print(hist(Data_num[[cname]], main = cname))})#
+
+##2.5.2 Boxplots (numerical attribute,The following code generates the graphics. See them in the final document casptone project)
+par(mfrow = c(3,4))
+sapply(names(Data_num), function(cname){if(is.numeric(Data_num[[cname]]))print(boxplot(Data_num[[cname]], main = cname))})#
+
+#2.5.3 Barplots (not numeric attribute).
+```{r}
+par(mfrow = c(3,4))
+barplot(table(Data_fact$SCHOOLDESC), main = "SCHOOLDESC")
+barplot(table(Data_fact$OWNERDESC), main = "OWNERDESC")
+barplot(table(Data_fact$CLASSDESC), main = "CLASSDESC")
+barplot(table(Data_fact$SALEDESC), main = "ALEDESC")
+barplot(table(Data_fact$STYLEDESC), main = "STYLEDESC")
+barplot(table(Data_fact$EXTFINISH_DESC), main = "EXTFINISH_DESC")
+barplot(table(Data_fact$ROOFDESC), main = "ROOFDESC")
+barplot(table(Data_fact$BASEMENTDESC), main = "BASEMENTDESC")
+barplot(table(Data_fact$GRADEDESC), main = "GRADEDESC")
+barplot(table(Data_fact$CONDITIONDESC), main = "CONDITIONDESC")
+barplot(table(Data_fact$CDUDESC), main = "CDUDESC")
+barplot(table(Data_fact$HEATINGCOOLINGDESC), main = "HEATINGCOOLINGDESC")
+
+```
+
+#2.6 Missing values
+#Verify the total number of missing values in the sample
+```{r}
+sum(is.na(Data2))
+```
+#2.6.1 vizualization missing values
+```{r}
+
+aggr(Data2, numbers=T, sortVar=T)
+```
+#2.6.2 Data whith out missing values.
+```{r}
+Data3<- na.omit(Data2)
+
+```
+#2.7 Dealing Ouliers (numeric Attribute)
+#Select numerical attributes to treat outliers
+```{r}
+Data_num<-dplyr::select_if(Data3, is.numeric)
+Data_fact<-dplyr::select_if(Data3, is.factor)
+Data_chr<-dplyr::select_if(Data3, is.character)
+```
+#2.7.1 Outliers Allocation
+#The imputation of outliers is done using the median as a measure of central tendency
+```{r}
+outlier <- function(x){
+x[x< quantile(x,0,25)-1.5*IQR(x) | x> quantile(x, 0,75) + 1.5*IQR(x)]<-median(x)
+x
+}
+Data_num[]<-lapply(Data_num, outlier)
+```
+#2.7.2 BoxplotS after outliers imputed(The following code generates the graphics. See them in the final document casptone project)
+par(mfrow = c(2,2))
+sapply(names(Data_num), function(cname){if(is.numeric(Data_num[[cname]]))print(boxplot(Data_num[[cname]], main = cname))})#
+
+#2.8 Target Attribute (SALEPRICE)
+#The dependent variable is categorized into three levels using quantail as a tool.
+```{r}
+Data3<- cbind(Data_num,Data_chr,Data_fact)
+xs= quantile(Data3$SALEPRICE, c(0,1/3,2/3,1))
+xs[1]=xs[1]-.00005
+data3_1<-Data3 %>% mutate(category=cut(SALEPRICE, breaks = xs, labels=c("low","middle","high")))
+
+```
+#2.8.1Plot Saleprice categorized
+#The saleprice is a balanced class
+```{r}
+plot(data3_1$category, main="Category=SALEPRICE")
+```
+
+## 2.9 BIVARIATE ANALYSIS
+##2.9.1 Correlation (numeric attributes)
+
+```{r}
+Data_num<-dplyr::select_if(data3_1, is.numeric)
+Data_fact<-dplyr::select_if(data3_1, is.factor)
+Data_chr<-dplyr::select_if(data3_1, is.character)
+corr_noclass<- Data_num
+Data_corr <-round(cor(corr_noclass, method = "pearson"),4)
+Data_corr[lower.tri(Data_corr, diag = T)]<-NA
+Data_corr<-as.data.frame(as.table(Data_corr))
+Data_corr<-na.omit(Data_corr)
+Data_corr<- Data_corr[order(-abs(Data_corr$Freq)),]
+```
+#2.9.2 Chi Squared test (no numeric attribute)
+```{r}
+chisq.test(table(Data_fact$TAXCODE,Data_fact$ROOFDESC))
+chisq.test(table(Data_fact$ROOFDESC,Data_fact$BASEMENTDESC))
+
+```
+
+#2.9.3 Zero Variance Analysis
+
+```{r}
+Datasale_3 = cbind(Data_fact,Data_num,Data_chr)
+NZV<- nearZeroVar(Datasale_3, saveMetrics = T)
+NZV_Attributes<- rownames(NZV)
+NZV_T<- cbind(NZV,NZV_Attributes )%>% filter(nzv == TRUE)
+```
+# 2.9.4 Remove highly correlated attributes and zero or near variance.
+```{r}
+
+drop_corr<- c( "FAIRMARKETBUILDING","FAIRMARKETTOTAL","LOCALLAND","FAIRMARKETLAND","LOCALTOTAL","LOCALBUILDING","COUNTYTOTAL", "SALEPRICE","COUNTYEXEMPTBLDG","CARDNUMBER","COUNTYBUILDING","BEDROOMS","FULLBATHS","FINISHEDLIVINGAREA")
+Data5<- Datasale_3[,!colnames(Datasale_3) %in% drop_corr]
+```
+
+
+#3.FEATURE SELECTION.
+#3.1 Information Gain
+```{r}
+library(FSelector)
+library(FSelectorRcpp)
+gain<-information_gain(x = Data5, y = Data5$SALEPRICE_CAT)
+gain<-gain[order(gain$importance),]
+gain
+```
+# Convert CDUDES attribute to factor.
+```{r}
+Data5$USEDESC<- as.factor(Data5$USEDESC)
+```
+
+#4 BUILD THE MODELS
+#Subset the data with hight information gain to build the model's attributes were taken which produced the high information gain.
+```{r}
+T_data<- subset(Data5, select = c("LOTAREA","PREVSALEPRICE","PREVSALEPRICE2","COUNTYLAND","STORIES","TOTALROOMS","HALFBATHS","FIREPLACES","BSMTGARAGE","category"))
+```
+#4.1 Build a Decision Tree Model
+#4.1.1 Fit the model
+```{r}
+Fit_model<- ctree(category ~  LOTAREA +PREVSALEPRICE+PREVSALEPRICE2+COUNTYLAND+STORIES+TOTALROOMS+HALFBATHS+FIREPLACES+BSMTGARAGE, data = T_data)
+```
+#4.1.3 Split the data in training and test set in a proportion of 70 to 30%.
+```{r}
+train_index <- sample(1:nrow(T_data), 0.7 * nrow(T_data))
+train.set <- T_data[train_index,]
+train.set <- T_data[train_index,]
+test.set  <- T_data[-train_index,]
+```
+#4.1.4 Run the model on the training set.
+```{r}
+Fit_model<- ctree(category ~  LOTAREA +PREVSALEPRICE+PREVSALEPRICE2+COUNTYLAND+STORIES+TOTALROOMS+HALFBATHS+FIREPLACES+BSMTGARAGE, data = train.set)
+```
+#4.1.5 Prediction on the test set.
+```{r}
+model_prediction <- predict(Fit_model, test.set)
+
+```
+#4.1.6 Confusion matrix
+```{r}
+Conf_matrix <-table(model_prediction, test.set$category)
+confusionMatrix(Conf_matrix)
+```
+# Run the model applying k fold cross-validation with Decision tree
+
+```{r}
+library(plyr)
+library(rpart)
+set.seed(123)
+form <- "category ~  LOTAREA +PREVSALEPRICE+PREVSALEPRICE2+COUNTYLAND+STORIES+TOTALROOMS+HALFBATHS+FIREPLACES+BSMTGARAGE"
+folds <- split(T_data, cut(sample(1:nrow(T_data)),10))
+errs <- rep(NA, length(folds))
+
+for (i in 1:length(folds)) {
+ test <- ldply(folds[i], data.frame)
+ train <- ldply(folds[-i], data.frame)
+ tmp.model <- rpart(form , train, method = "class")
+ tmp.predict <- predict(tmp.model, newdata = test, type = "class")
+ conf.mat <- table(test$category, tmp.predict)
+ errs[i] <- 1-sum(diag(conf.mat))/sum(conf.mat)
+}
+print(sprintf("average error using k-fold cross-validation: %.3f percent", 100*mean(errs)))
+```
+
+#4.2 Multinomial Logistic Regression
+# Set the reference group for SALEPRICE to be category Low.
+# 4.2.1 first, set the base group using relevel() function and the ref argument which stands for "reference group."
+```{r}
+T_data$category<- as.factor(T_data$category)
+T_data$category <- relevel(T_data$category, ref=1)
+```
+#4.2.2 Fit the model
+```{r}
+library(nnet)
+model_RML <- multinom(category ~  LOTAREA +PREVSALEPRICE+PREVSALEPRICE2+COUNTYLAND+STORIES+TOTALROOMS+HALFBATHS+FIREPLACES+BSMTGARAGE, data = T_data)
+
+```
+
+#4.2.3Summary of the results.
+```{r}
+summary(model_RML)
+
+```
+#4.2.4 Z- value test
+```{r}
+summary(model_RML)$standard.errors
+```
+
+```{r}
+zvalues <- summary(model_RML)$coefficients / summary(model_RML)$standard.errors
+zvalues
+```
+
+#P- value.
+```{r}
+pnorm(abs(zvalues), lower.tail=FALSE)*2
+```
+# Confusionmatrix 
+```{r}
+pred_LMR <- predict(model_RML)
+confusionMatrix(table(pred_LMR, T_data$category))
+```
+
+#4.3 Random forest
+#Split the dataset into train and validation set in the ratio 70:30.
+```{r}
+Data_ramdom<- T_data
+set.seed(100)
+train <- sample(nrow(Data_ramdom), 0.7*nrow(T_data), replace = FALSE)
+TrainSet <- Data_ramdom[train,]
+ValidSet <- Data_ramdom[-train,]
+summary(TrainSet)
+summary(ValidSet)
+```
+# 4.3.1 Create a Random Forest model with default parameters, By default, number of trees is 500 #and number of variables tried at each split is 2 in this case. 
+```{r}
+
+model1 <- randomForest(category ~ ., data = TrainSet, importance = TRUE)
+model1
+```
+# 4.3.2 Tuning parameters of Random Forest model will be changed 6 attributes
+```{r}
+model2 <- randomForest(category ~ ., data = TrainSet, ntree = 500, mtry = 6, importance = TRUE)
+model2
+```
+#4.3.3 Tuning parameters of Random Forest model will be changed 9 attributes
+```{r}
+model3 <- randomForest(category ~ ., data = TrainSet, ntree = 500, mtry = 9, importance = TRUE)
+model3
+```
+# 4.3.4 Predicting on training set model1
+#The prediction is made in the model1 that obtained less error in the Random Forest in this case #Model1 with 41.19%.
+```{r}
+predTrain <- predict(model1, TrainSet, type = "class")
+```
+# 4.3.5 Checking classification accuracy
+```{r}
+confusionMatrix(table(predTrain, TrainSet$category)) 
+```
+# 4.3.6 Predicting on Validation set model1
+```{r}
+predValid <- predict(model1, ValidSet, type = "class")
+```
+# 4.3.7 Checking classification accuracy
+```{r}
+mean(predValid == ValidSet$category) 
+confusionMatrix(table(predValid,ValidSet$category))
+```
+# 4.3.8 Check important variables
+```{r}
+importance(model1) 
+varImpPlot(model1) 
+```
+# 4.4 Naive Bayes Classifier model
+```{r}
+library(e1071)
+set.seed(1234)
+```
+4.4.1 Build the model
+#Split the dataset into train and test set in the ratio 70:30.
+```{r}
+train_index <- sample(1:nrow(T_data), 0.7 * nrow(T_data))
+train.set <- T_data[train_index,]
+test.set  <- T_data[-train_index,]
+```
+#4.4.2 Run the model.
+```{r}
+clasificadorBayes <- naiveBayes(category~ ., data = train.set)
+```
+#4.4.3 Predict model in test set.
+```{r}
+pred_valid_bayes <- predict(clasificadorBayes, newdata = test.set)
+```
+#4.4.4 Confusionmatrix
+```{r}
+matrizConfusion2 <- table(test.set$category, pred_valid_bayes)
+matrizConfusion2
+```
+
+```{r}
+
+confusionMatrix(matrizConfusion2)
